@@ -49,17 +49,20 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
-/* Ocultar elementos por defecto de Streamlit (cabecera, menú de tres puntos, fork, github) */
-#MainMenu {visibility: hidden;}
+/* Ocultar elementos de marca de Streamlit (footer, botón de deploy/fork, icono de github) */
 footer {visibility: hidden;}
-header {visibility: hidden; display: none !important;}
-.stAppHeader {display: none !important;}
-[data-testid="stHeader"] {display: none !important;}
-[data-testid="stToolbar"] {display: none !important;}
+.stAppDeployButton, [data-testid="stAppDeployButton"] {display: none !important;}
+.stToolbarActions, [data-testid="stToolbarActions"] {display: none !important;}
 
-/* Ajustar el padding superior para compensar la barra oculta */
+/* Mantener visible el menú de tres puntos (MainMenu) para poder cambiar el tema */
+#MainMenu, .stMainMenu, [data-testid="stMainMenu"] {
+    visibility: visible !important;
+    display: inline-block !important;
+}
+
+/* Ajustar el padding superior para equilibrar el diseño con la barra superior visible */
 [data-testid="stAppViewContainer"] > section:first-child {
-    padding-top: 2rem !important;
+    padding-top: 1.5rem !important;
 }
 
 /* Aplicar la fuente global Outfit */
