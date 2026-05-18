@@ -50,11 +50,30 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
 /* Ocultar elementos de marca de Streamlit (footer, botón de deploy/fork, icono de github, botón manage app y marcas flotantes) */
-footer {visibility: hidden;}
+footer, .stApp [class*="MadeWithStreamlit"] {
+    display: none !important;
+    visibility: hidden !important;
+}
 .stAppDeployButton, [data-testid="stAppDeployButton"] {display: none !important;}
 .stToolbarActions, [data-testid="stToolbarActions"] {display: none !important;}
 [data-testid="manage-app-button"] {display: none !important;}
-div[class*="viewerBadge"], div[class^="viewerBadge"] {display: none !important;}
+
+/* Ocultar el viewer badge flotante de Streamlit Cloud (usando los selectores de clase exactos del usuario) */
+._container_gzau3_1, ._viewerBadge_nim44_23, [class*="viewerBadge"], [class*="container_gzau3_1"] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    opacity: 0 !important;
+}
+
+/* Ocultar opciones de "Print" y "Record a screencast" del menú de 3 puntos */
+[data-testid="stMainMenuList"] li:nth-child(4),
+[data-testid="stMainMenuList"] li:nth-child(5),
+[data-testid="stMainMenuList"] ul:nth-child(4),
+[data-testid="stMainMenuList"] ul:nth-child(5) {
+    display: none !important;
+}
 
 /* Mantener visible el menú de tres puntos (MainMenu) para poder cambiar el tema */
 #MainMenu, .stMainMenu, [data-testid="stMainMenu"] {
