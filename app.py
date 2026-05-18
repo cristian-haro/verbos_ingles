@@ -49,10 +49,12 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
-/* Ocultar elementos de marca de Streamlit (footer, botón de deploy/fork, icono de github) */
+/* Ocultar elementos de marca de Streamlit (footer, botón de deploy/fork, icono de github, botón manage app y marcas flotantes) */
 footer {visibility: hidden;}
 .stAppDeployButton, [data-testid="stAppDeployButton"] {display: none !important;}
 .stToolbarActions, [data-testid="stToolbarActions"] {display: none !important;}
+[data-testid="manage-app-button"] {display: none !important;}
+div[class*="viewerBadge"], div[class^="viewerBadge"] {display: none !important;}
 
 /* Mantener visible el menú de tres puntos (MainMenu) para poder cambiar el tema */
 #MainMenu, .stMainMenu, [data-testid="stMainMenu"] {
