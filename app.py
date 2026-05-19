@@ -24,6 +24,15 @@ if 'current_verbs' not in st.session_state:
 if 'validated' not in st.session_state:
     st.session_state.validated = False
 
+if 'wizard_step' not in st.session_state:
+    st.session_state.wizard_step = 0
+
+if 'view_mode' not in st.session_state:
+    st.session_state.view_mode = "🪄 Paso a Paso (Wizard)"
+
+if 'respuestas' not in st.session_state:
+    st.session_state.respuestas = {}
+
 # Función para iniciar un nuevo examen/práctica
 def iniciar_nuevo_examen():
     # Filtrar solo verbos habilitados
@@ -39,10 +48,32 @@ def iniciar_nuevo_examen():
         
     st.session_state.exam_id += 1
     st.session_state.validated = False
+    st.session_state.wizard_step = 0
+    st.session_state.respuestas = {
+        v['infinitive']: {"infinitive": "", "past_simple": "", "past_participle": ""}
+        for v in st.session_state.current_verbs
+    }
 
 # Si no hay verbos seleccionados actualmente, iniciar uno al cargar
 if not st.session_state.current_verbs and len(st.session_state.enabled_verbs) > 0:
     iniciar_nuevo_examen()
+
+# Asegurar inicialización de respuestas
+if st.session_state.current_verbs and not st.session_state.respuestas:
+    st.session_state.respuestas = {
+        v['infinitive']: {"infinitive": "", "past_simple": "", "past_participle": ""}
+        for v in st.session_state.current_verbs
+    }
+
+# Capturar y sincronizar respuestas de los widgets de Streamlit en session_state a st.session_state.respuestas
+if st.session_state.current_verbs and st.session_state.respuestas:
+    for verb in st.session_state.current_verbs:
+        base_key = f"{verb['infinitive']}_{st.session_state.exam_id}"
+        fields = {'inf': 'infinitive', 'past': 'past_simple', 'part': 'past_participle'}
+        for field, dict_key in fields.items():
+            st_key = f"{field}_{base_key}"
+            if st_key in st.session_state:
+                st.session_state.respuestas[verb['infinitive']][dict_key] = st.session_state[st_key]
 
 # Inyectar estilos CSS premium adaptativos
 st.markdown("""
@@ -224,6 +255,61 @@ html, body, [data-testid="stAppViewContainer"], .stText {
     font-size: 1.1rem;
     opacity: 0.85;
 }
+
+/* --- ESTILOS MODERNOS PARA WIZARD --- */
+.wizard-container {
+    background-color: var(--secondary-background-color, #f8f9fa);
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
+    border: 1px solid var(--border-color, #e2e8f0);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.wizard-spanish-title {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: #4f46e5;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.progress-wrapper {
+    margin-bottom: 2rem;
+    background-color: var(--secondary-background-color, #f8f9fa);
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.progress-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-color, #4a5568);
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar-container {
+    background-color: var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    height: 10px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -254,36 +340,153 @@ with tab_practicar:
     if total_habilitados == 0:
         st.info("⚠️ No tienes ningún verbo habilitado en este momento. Dirígete a la pestaña **Gestionar Verbos** para activar los verbos que deseas practicar.")
     else:
-        # Información de sesión
-        st.markdown(f"✨ **Configuración actual:** Tienes **{total_habilitados}** verbos habilitados. Este examen sortea la mitad: **{len(st.session_state.current_verbs)}** verbos.")
-        
-        # Formulario de práctica
-        with st.form("exam_form", clear_on_submit=False, enter_to_submit=False):
-            
-            # Renderizar cada verbo seleccionado en su propia tarjeta elegante
-            respuestas_usuario = {}
-            
-            for index, verb in enumerate(st.session_state.current_verbs):
-                base_key = f"{verb['infinitive']}_{st.session_state.exam_id}"
+        # Selector de vista interactivo
+        col_sel1, col_sel2 = st.columns([2, 1])
+        with col_sel1:
+            st.session_state.view_mode = st.radio(
+                "📱 Modo de visualización:",
+                ["🪄 Paso a Paso (Wizard)", "📋 Lista Completa"],
+                index=0 if st.session_state.view_mode == "🪄 Paso a Paso (Wizard)" else 1,
+                horizontal=True,
+                key="view_mode_selector"
+            )
+        with col_sel2:
+            st.markdown('<div style="margin-top: 1.8rem;"></div>', unsafe_allow_html=True)
+            st.markdown(f"✨ **Total examen:** {len(st.session_state.current_verbs)} verbos.")
+
+        if st.session_state.view_mode == "📋 Lista Completa":
+            # ==================== LIST MODE (LISTA COMPLETA) ====================
+            with st.form("exam_form", clear_on_submit=False, enter_to_submit=False):
                 
-                # HTML de la tarjeta del verbo
+                # Renderizar cada verbo seleccionado en su propia tarjeta elegante
+                for index, verb in enumerate(st.session_state.current_verbs):
+                    base_key = f"{verb['infinitive']}_{st.session_state.exam_id}"
+                    
+                    # HTML de la tarjeta del verbo
+                    st.markdown(f"""
+                    <div class="verb-card">
+                        <div class="verb-spanish">
+                            <span>{verb['spanish']}</span>
+                            <span class="verb-spanish-badge">Verbo {index + 1}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Columnas para los 3 inputs
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown('<div class="field-label">1. Infinitive</div>', unsafe_allow_html=True)
+                        inf_input = st.text_input(
+                            "Infinitive", 
+                            value=st.session_state.respuestas[verb['infinitive']]['infinitive'],
+                            key=f"inf_{base_key}", 
+                            label_visibility="collapsed"
+                        )
+                    
+                    with col2:
+                        st.markdown('<div class="field-label">2. Past Simple</div>', unsafe_allow_html=True)
+                        past_input = st.text_input(
+                            "Past Simple", 
+                            value=st.session_state.respuestas[verb['infinitive']]['past_simple'],
+                            key=f"past_{base_key}", 
+                            label_visibility="collapsed"
+                        )
+                        
+                    with col3:
+                        st.markdown('<div class="field-label">3. Past Participle</div>', unsafe_allow_html=True)
+                        part_input = st.text_input(
+                            "Past Participle", 
+                            value=st.session_state.respuestas[verb['infinitive']]['past_participle'],
+                            key=f"part_{base_key}", 
+                            label_visibility="collapsed"
+                        )
+                    
+                    # Mostrar corrección inmediata dentro de la misma tarjeta si ya se ha validado
+                    if st.session_state.validated:
+                        correct_inf = verificar_respuesta(inf_input, verb['infinitive'])
+                        correct_past = verificar_respuesta(past_input, verb['past_simple'])
+                        correct_part = verificar_respuesta(part_input, verb['past_participle'])
+                        
+                        c_col1, c_col2, c_col3 = st.columns(3)
+                        
+                        with c_col1:
+                            if correct_inf:
+                                st.markdown('<div class="feedback-box feedback-correct">✅ ¡Correcto!</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{verb["infinitive"]}</span></div>', unsafe_allow_html=True)
+                                
+                        with c_col2:
+                            if correct_past:
+                                st.markdown('<div class="feedback-box feedback-correct">✅ ¡Correcto!</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{verb["past_simple"]}</span></div>', unsafe_allow_html=True)
+                                
+                        with c_col3:
+                            if correct_part:
+                                st.markdown('<div class="feedback-box feedback-correct">✅ ¡Correcto!</div>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{verb["past_participle"]}</span></div>', unsafe_allow_html=True)
+                    
+                    # Espaciado extra entre tarjetas
+                    st.markdown('<div style="margin-bottom: 0.75rem;"></div>', unsafe_allow_html=True)
+                
+                # Botones del formulario
+                col_btn1, col_btn2 = st.columns([1, 4])
+                with col_btn1:
+                    submit_btn = st.form_submit_button("🧪 Validar Respuestas", type="primary", use_container_width=True)
+                with col_btn2:
+                    nuevo_examen_btn = st.form_submit_button("🔄 Siguiente Examen / Re-sortear", use_container_width=False)
+                    
+                if nuevo_examen_btn:
+                    iniciar_nuevo_examen()
+                    st.rerun()
+                    
+                if submit_btn:
+                    st.session_state.validated = True
+                    st.rerun()
+
+        else:
+            # ==================== WIZARD MODE (PASO A PASO) ====================
+            n_verbs = len(st.session_state.current_verbs)
+            if n_verbs > 0:
+                # Clamp wizard step
+                st.session_state.wizard_step = min(max(0, st.session_state.wizard_step), n_verbs - 1)
+                current_verb = st.session_state.current_verbs[st.session_state.wizard_step]
+                base_key = f"{current_verb['infinitive']}_{st.session_state.exam_id}"
+                progress_pct = int(((st.session_state.wizard_step + 1) / n_verbs) * 100)
+                
+                # Barra de progreso moderna
                 st.markdown(f"""
-                <div class="verb-card">
-                    <div class="verb-spanish">
-                        <span>{verb['spanish']}</span>
-                        <span class="verb-spanish-badge">Verbo {index + 1}</span>
+                <div class="progress-wrapper">
+                    <div class="progress-text">
+                        <span>Progreso de Práctica</span>
+                        <span>Verbo {st.session_state.wizard_step + 1} de {n_verbs} ({progress_pct}%)</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" style="width: {progress_pct}%;"></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Columnas para los 3 inputs
+                # Tarjeta del verbo actual
+                st.markdown(f"""
+                <div class="wizard-container">
+                    <div class="wizard-spanish-title">
+                        <span>{current_verb['spanish']}</span>
+                        <span class="verb-spanish-badge" style="font-size: 0.9rem;">Verbo {st.session_state.wizard_step + 1}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Inputs en columnas responsivas
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
                     st.markdown('<div class="field-label">1. Infinitive</div>', unsafe_allow_html=True)
                     inf_input = st.text_input(
                         "Infinitive", 
-                        #placeholder="ej. go", 
+                        value=st.session_state.respuestas[current_verb['infinitive']]['infinitive'],
                         key=f"inf_{base_key}", 
                         label_visibility="collapsed"
                     )
@@ -292,7 +495,7 @@ with tab_practicar:
                     st.markdown('<div class="field-label">2. Past Simple</div>', unsafe_allow_html=True)
                     past_input = st.text_input(
                         "Past Simple", 
-                        #placeholder="ej. went", 
+                        value=st.session_state.respuestas[current_verb['infinitive']]['past_simple'],
                         key=f"past_{base_key}", 
                         label_visibility="collapsed"
                     )
@@ -301,23 +504,16 @@ with tab_practicar:
                     st.markdown('<div class="field-label">3. Past Participle</div>', unsafe_allow_html=True)
                     part_input = st.text_input(
                         "Past Participle", 
-                        #placeholder="ej. gone", 
+                        value=st.session_state.respuestas[current_verb['infinitive']]['past_participle'],
                         key=f"part_{base_key}", 
                         label_visibility="collapsed"
                     )
                 
-                # Guardar entradas para procesarlas al enviar el formulario
-                respuestas_usuario[verb['infinitive']] = {
-                    "infinitive": inf_input,
-                    "past_simple": past_input,
-                    "past_participle": part_input
-                }
-                
-                # Mostrar corrección inmediata dentro de la misma tarjeta si ya se ha validado
+                # Mostrar corrección inmediata si ya se ha validado
                 if st.session_state.validated:
-                    correct_inf = verificar_respuesta(inf_input, verb['infinitive'])
-                    correct_past = verificar_respuesta(past_input, verb['past_simple'])
-                    correct_part = verificar_respuesta(part_input, verb['past_participle'])
+                    correct_inf = verificar_respuesta(inf_input, current_verb['infinitive'])
+                    correct_past = verificar_respuesta(past_input, current_verb['past_simple'])
+                    correct_part = verificar_respuesta(part_input, current_verb['past_participle'])
                     
                     c_col1, c_col2, c_col3 = st.columns(3)
                     
@@ -325,38 +521,67 @@ with tab_practicar:
                         if correct_inf:
                             st.markdown('<div class="feedback-box feedback-correct">✅ ¡Correcto!</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{verb["infinitive"]}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{current_verb["infinitive"]}</span></div>', unsafe_allow_html=True)
                             
                     with c_col2:
                         if correct_past:
                             st.markdown('<div class="feedback-box feedback-correct">✅ ¡Correcto!</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{verb["past_simple"]}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{current_verb["past_simple"]}</span></div>', unsafe_allow_html=True)
                             
                     with c_col3:
                         if correct_part:
                             st.markdown('<div class="feedback-box feedback-correct">✅ ¡Correcto!</div>', unsafe_allow_html=True)
                         else:
-                            st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{verb["past_participle"]}</span></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="feedback-box feedback-incorrect">❌ Corrección: <span class="correction-word">{current_verb["past_participle"]}</span></div>', unsafe_allow_html=True)
                 
-                # Espaciado extra entre tarjetas
-                st.markdown('<div style="margin-bottom: 0.75rem;"></div>', unsafe_allow_html=True)
-            
-            # Botones del formulario
-            col_btn1, col_btn2 = st.columns([1, 4])
-            with col_btn1:
-                submit_btn = st.form_submit_button("🧪 Validar Respuestas", type="primary", use_container_width=True)
-            with col_btn2:
-                # Botón para sortear otro examen dentro de las acciones del form
-                nuevo_examen_btn = st.form_submit_button("🔄 Siguiente Examen / Re-sortear", use_container_width=False)
+                # Fila de navegación
+                st.markdown('<div style="margin-top: 1.5rem;"></div>', unsafe_allow_html=True)
+                nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
                 
-            if nuevo_examen_btn:
-                iniciar_nuevo_examen()
-                st.rerun()
+                with nav_col1:
+                    prev_disabled = st.session_state.wizard_step == 0
+                    if st.button("👈 Anterior", disabled=prev_disabled, use_container_width=True, key="wizard_prev_btn"):
+                        st.session_state.wizard_step -= 1
+                        st.rerun()
                 
-            if submit_btn:
-                st.session_state.validated = True
-                st.rerun()
+                with nav_col2:
+                    # Selector dropdown de salto rápido
+                    opciones_jumper = [f"Verbo {i+1}: {v['spanish']}" for i, v in enumerate(st.session_state.current_verbs)]
+                    jumper_val = st.selectbox(
+                        "Ir directo al verbo:",
+                        options=opciones_jumper,
+                        index=st.session_state.wizard_step,
+                        label_visibility="collapsed",
+                        key="wizard_jumper_select"
+                    )
+                    # Trigger de salto si cambia la selección
+                    selected_index = opciones_jumper.index(jumper_val)
+                    if selected_index != st.session_state.wizard_step:
+                        st.session_state.wizard_step = selected_index
+                        st.rerun()
+                
+                with nav_col3:
+                    if st.session_state.wizard_step < n_verbs - 1:
+                        if st.button("Siguiente 👉", use_container_width=True, key="wizard_next_btn"):
+                            st.session_state.wizard_step += 1
+                            st.rerun()
+                    else:
+                        if st.button("🧪 Validar", type="primary", use_container_width=True, key="wizard_validate_step_btn"):
+                            st.session_state.validated = True
+                            st.rerun()
+                
+                # Botones generales abajo
+                st.divider()
+                act_col1, act_col2 = st.columns([1, 1])
+                with act_col1:
+                    if st.button("🧪 Validar Todo el Examen", type="primary", use_container_width=True, key="wizard_validate_full_btn"):
+                        st.session_state.validated = True
+                        st.rerun()
+                with act_col2:
+                    if st.button("🔄 Nuevo Examen / Re-sortear", use_container_width=True, key="wizard_reset_full_btn"):
+                        iniciar_nuevo_examen()
+                        st.rerun()
 
         # Mostrar panel de puntuación si se ha validado
         if st.session_state.validated:
@@ -365,7 +590,7 @@ with tab_practicar:
             verbos_perfectos = 0
             
             for verb in st.session_state.current_verbs:
-                ans = respuestas_usuario[verb['infinitive']]
+                ans = st.session_state.respuestas[verb['infinitive']]
                 c_inf = verificar_respuesta(ans['infinitive'], verb['infinitive'])
                 c_past = verificar_respuesta(ans['past_simple'], verb['past_simple'])
                 c_part = verificar_respuesta(ans['past_participle'], verb['past_participle'])
@@ -401,6 +626,32 @@ with tab_practicar:
                 st.warning("👍 ¡Buen intento! Tienes buena base, pero aún quedan algunos verbos por pulir. ¡Vuelve a intentarlo!")
             else:
                 st.error("📚 Necesitas repasar un poco más. Prueba a habilitar menos verbos en la pestaña de gestión para enfocarte en grupos más pequeños.")
+        
+        # Inyectar script de JavaScript para navegación con Enter ultra-rápida (UX Premium)
+        st.markdown(
+            """<img src="x" onerror="(function() {
+                const inputs = Array.from(document.querySelectorAll('input[type=text]')).filter(input => !input.closest('[data-testid=stSidebar]'));
+                inputs.forEach((input, index) => {
+                    if (input.dataset.enterListenerBound) return;
+                    input.dataset.enterListenerBound = 'true';
+                    input.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (index < inputs.length - 1) {
+                                inputs[index + 1].focus();
+                            } else {
+                                const buttons = Array.from(document.querySelectorAll('button'));
+                                const targetBtn = buttons.find(btn => btn.textContent.includes('Siguiente') || btn.textContent.includes('Validar'));
+                                if (targetBtn) {
+                                    targetBtn.click();
+                                }
+                            }
+                        }
+                    });
+                });
+            })()" style="display:none;"/>""",
+            unsafe_allow_html=True
+        )
 
 # ==================== PESTAÑA: GESTIONAR VERBOS ====================
 with tab_gestion:
